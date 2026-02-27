@@ -49,16 +49,21 @@ class MalwareModelTrainer:
         print("Loading dataset...")
         
         try:
-            # Check if we have separate features and labels files
+            # The actual feature data is in mh_100k_dataset.csv
+            # (mh_100k_features_all.csv is just a list of feature names, not data)
             features_path = Path(os.getenv('DATASET_PATH', settings.DATASET_PATH))
             labels_path = Path(os.getenv('LABELS_PATH', settings.LABELS_PATH))
             
-            # Read header to get column info - skip first row if it contains metadata
-            header_df = pd.read_csv(features_path, nrows=0, skiprows=1)
+            print(f"Features path: {features_path}")
+            print(f"Labels path: {labels_path}")
+            
+            # Read header to get column info
+            header_df = pd.read_csv(features_path, nrows=0)
             columns = header_df.columns.tolist()
-            print(f"Detected {len(columns)} columns")
+            print(f"Detected {len(columns)} feature columns")
 
-            # Feature columns are all columns (no metadata in data rows)
+            # All columns are features in mh_100k_dataset.csv
+            # (it doesn't have a CLASS column - that's in the labels file)
             feature_cols = columns
             self.feature_names = feature_cols
             
@@ -79,15 +84,14 @@ class MalwareModelTrainer:
                     features_path,
                     usecols=feature_cols,
                     dtype=dtype_map,
-                    low_memory=False,
-                    skiprows=1
+                    low_memory=False
                 )
                 X = X_df.to_numpy(copy=False)
                 np.nan_to_num(X, copy=False)
                 
                 # Load labels separately
                 print("Loading labels...")
-                labels_df = pd.read_csv(labels_path, skiprows=1)
+                labels_df = pd.read_csv(labels_path)
                 # The labels file has 'class' or 'CLASS' column
                 label_col = 'class' if 'class' in labels_df.columns else 'CLASS'
                 label_values = labels_df[label_col].to_numpy(copy=False)
@@ -174,16 +178,16 @@ class MalwareModelTrainer:
         total_counts = {0: 0, 1: 0}
         
         # Detect label column name
-        labels_header = pd.read_csv(labels_path, nrows=0, skiprows=1)
+        labels_header = pd.read_csv(labels_path, nrows=0)
         label_col = 'class' if 'class' in labels_header.columns else 'CLASS'
         
+        print(f"Reading labels from column: {label_col}")
         label_reader = pd.read_csv(
             labels_path,
             usecols=[label_col],
             dtype={label_col: np.float32},
             chunksize=chunk_size,
-            low_memory=True,
-            skiprows=1
+            low_memory=True
         )
         for chunk in label_reader:
             label_values = chunk[label_col].to_numpy(copy=False)
@@ -210,8 +214,7 @@ class MalwareModelTrainer:
             usecols=feature_cols,
             dtype=dtype_map,
             chunksize=chunk_size,
-            low_memory=True,
-            skiprows=1
+            low_memory=True
         )
         
         labels_reader = pd.read_csv(
@@ -219,8 +222,7 @@ class MalwareModelTrainer:
             usecols=[label_col],
             dtype={label_col: np.float32},
             chunksize=chunk_size,
-            low_memory=True,
-            skiprows=1
+            low_memory=True
         )
         
         for features_chunk, labels_chunk in zip(features_reader, labels_reader):
