@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APK Malware Detection System</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ APK Malware Detection System</h1>
+            <p class="subtitle">ML-Powered Security Analysis with NIST CIA Risk Scoring</p>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="card">
+                    <h2>Upload APK for Analysis</h2>
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-icon">📱</div>
+                        <p>Drag & Drop your APK file here</p>
+                        <p class="upload-hint">or</p>
+                        <input type="file" id="fileInput" accept=".apk" style="display: none;">
+                        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                            Choose File
+                        </button>
+                        <p class="file-info" id="fileInfo"></p>
+                    </div>
+                    <div class="progress-bar" id="progressBar" style="display: none;">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="status-message" id="statusMessage"></p>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <div class="card">
+                    <h2>Analysis Results</h2>
+                    
+                    <!-- Overall Risk -->
+                    <div class="risk-summary" id="riskSummary">
+                        <div class="risk-badge" id="riskBadge">
+                            <div class="risk-level" id="riskLevel">-</div>
+                            <div class="risk-score" id="riskScore">0</div>
+                        </div>
+                        <div class="risk-details">
+                            <h3 id="apkName">-</h3>
+                            <p><strong>Package:</strong> <span id="packageName">-</span></p>
+                            <p><strong>ML Prediction:</strong> <span id="mlPrediction" class="badge">-</span></p>
+                            <p><strong>Confidence:</strong> <span id="mlConfidence">0%</span></p>
+                            <p><strong>Scan ID:</strong> <span id="scanId" class="scan-id">-</span></p>
+                        </div>
+                    </div>
+
+                    <!-- CIA Analysis -->
+                    <div class="cia-section">
+                        <h3>NIST CIA Framework Analysis</h3>
+                        <div class="cia-grid">
+                            <div class="cia-item">
+                                <div class="cia-icon">🔒</div>
+                                <h4>Confidentiality</h4>
+                                <div class="cia-bar">
+                                    <div class="cia-fill" id="ciaConfidentiality"></div>
+                                </div>
+                                <p class="cia-score" id="cScore">0</p>
+                                <p class="cia-level" id="cLevel">-</p>
+                                <p class="cia-desc" id="cDesc">-</p>
+                            </div>
+                            <div class="cia-item">
+                                <div class="cia-icon">✅</div>
+                                <h4>Integrity</h4>
+                                <div class="cia-bar">
+                                    <div class="cia-fill" id="ciaIntegrity"></div>
+                                </div>
+                                <p class="cia-score" id="iScore">0</p>
+                                <p class="cia-level" id="iLevel">-</p>
+                                <p class="cia-desc" id="iDesc">-</p>
+                            </div>
+                            <div class="cia-item">
+                                <div class="cia-icon">⚡</div>
+                                <h4>Availability</h4>
+                                <div class="cia-bar">
+                                    <div class="cia-fill" id="ciaAvailability"></div>
+                                </div>
+                                <p class="cia-score" id="aScore">0</p>
+                                <p class="cia-level" id="aLevel">-</p>
+                                <p class="cia-desc" id="aDesc">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Features Summary -->
+                    <div class="features-section">
+                        <h3>Feature Summary</h3>
+                        <div class="feature-grid">
+                            <div class="feature-box">
+                                <div class="feature-icon">🔑</div>
+                                <div class="feature-value" id="permCount">0</div>
+                                <div class="feature-label">Permissions</div>
+                            </div>
+                            <div class="feature-box">
+                                <div class="feature-icon">📡</div>
+                                <div class="feature-value" id="apiCount">0</div>
+                                <div class="feature-label">API Calls</div>
+                            </div>
+                            <div class="feature-box">
+                                <div class="feature-icon">🎯</div>
+                                <div class="feature-value" id="intentCount">0</div>
+                                <div class="feature-label">Intents</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Threat Indicators -->
+                    <div class="threats-section" id="threatsSection">
+                        <h3>⚠️ Threat Indicators</h3>
+                        <ul class="threat-list" id="threatList"></ul>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <div class="recommendations-section">
+                        <h3>📋 Recommendations</h3>
+                        <ul class="recommendation-list" id="recommendationList"></ul>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="action-buttons">
+                        <button class="btn btn-secondary" onclick="exportReport()">📥 Export Report</button>
+                        <button class="btn btn-primary" onclick="resetAnalysis()">🔄 New Analysis</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Statistics Section -->
+            <section class="stats-section">
+                <div class="card">
+                    <h2>System Statistics</h2>
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-box">
+                            <div class="stat-value" id="totalScans">-</div>
+                            <div class="stat-label">Total Scans</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="malwareRate">-</div>
+                            <div class="stat-label">Malware Rate</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="avgRisk">-</div>
+                            <div class="stat-label">Avg Risk Score</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value" id="avgTime">-</div>
+                            <div class="stat-label">Avg Processing Time</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 APK Malware Detection System | Powered by MH-100K Dataset</p>
+            <p><a href="/docs" target="_blank">API Documentation</a></p>
+        </footer>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
