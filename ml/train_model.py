@@ -49,50 +49,52 @@ class MalwareModelTrainer:
         print("Loading dataset...")
         
         try:
-            # Read header first to build an efficient dtype map
-            header_df = pd.read_csv(settings.DATASET_PATH, nrows=0)
+            # Check if we have separate features and labels files
+            features_path = Path(os.getenv('DATASET_PATH', settings.DATASET_PATH))
+            labels_path = Path(os.getenv('LABELS_PATH', settings.LABELS_PATH))
+            
+            # Read header to get column info
+            header_df = pd.read_csv(features_path, nrows=0)
             columns = header_df.columns.tolist()
 
-            # Load feature names
-            features_df = pd.read_csv(settings.FEATURES_ALL_PATH)
-            self.feature_names = features_df['features'].tolist()
-
-            # Separate features and labels
-            # Using 'CLASS' as the main label (0=benign, 1=malware)
-            feature_cols = columns[5:-5]
-            label_col = 'CLASS' if 'CLASS' in columns else 'vt_detection'
-            use_cols = feature_cols + [label_col]
-
+            # Load feature names list
+            features_list_path = Path(os.getenv('FEATURES_ALL_PATH', settings.FEATURES_ALL_PATH))
+            # Feature columns (exclude metadata)
+            feature_cols = [col for col in columns if col not in ['sha256', 'pkg_name', 'apk_size', 'dex_date', 'markets']]
+            self.feature_names = feature_cols
+            
             dtype_map = {col: np.float32 for col in feature_cols}
-            # Read label as float to tolerate missing values
-            dtype_map[label_col] = np.float32
 
             if 0 < self.subset_fraction < 1.0:
                 X, y = self._load_stratified_subset_chunked(
+                    features_path,
+                    labels_path,
                     feature_cols,
-                    label_col,
                     dtype_map
                 )
                 print(f"Dataset loaded (subset): {X.shape[0]} samples, {X.shape[1]} features")
             else:
-                # Load only required columns with memory-friendly dtypes
-                df = pd.read_csv(
-                    settings.DATASET_PATH,
-                    usecols=use_cols,
+                # Load features
+                print("Loading features...")
+                X_df = pd.read_csv(
+                    features_path,
+                    usecols=feature_cols,
                     dtype=dtype_map,
                     low_memory=False
                 )
-                print(f"Dataset loaded: {df.shape[0]} samples, {len(feature_cols)} features")
-
-                X = df[feature_cols].to_numpy(copy=False)
+                X = X_df.to_numpy(copy=False)
                 np.nan_to_num(X, copy=False)
-
-                label_values = df[label_col].to_numpy(copy=False)
+                
+                # Load labels separately
+                print("Loading labels...")
+                labels_df = pd.read_csv(labels_path)
+                # The labels file has 'class' or 'CLASS' column
+                label_col = 'class' if 'class' in labels_df.columns else 'CLASS'
+                label_values = labels_df[label_col].to_numpy(copy=False)
                 np.nan_to_num(label_values, copy=False)
-                if label_col == 'CLASS':
-                    y = label_values.astype(np.int8, copy=False)
-                else:
-                    y = (label_values > 0).astype(np.int8)
+                y = label_values.astype(np.int8, copy=False)
+                
+                print(f"Dataset loaded: {X.shape[0]} samples, {X.shape[1]} features")
 
             print(f"Features shape: {X.shape}")
             label_counts = pd.Series(y).value_counts()
@@ -158,33 +160,34 @@ class MalwareModelTrainer:
         print(f"Subset size: {X_subset.shape[0]} samples")
         return X_subset, y_subset
 
-    def _load_stratified_subset_chunked(self, feature_cols, label_col, dtype_map):
+    def _load_stratified_subset_chunked(self, features_path, labels_path, feature_cols, dtype_map):
         """Load a stratified subset without reading the full dataset into memory"""
         fraction = self.subset_fraction
         print(f"Applying stratified subset: {fraction:.2f} of data")
 
-        label_dtype = np.float32
         chunk_size = 20000
         if os.getenv("RAM_GB") == "16":
             chunk_size = 10000
             print("Using tuned chunk size for 16 GB RAM: 10000")
 
-        # First pass: count labels
+        # First pass: count labels from labels file
         total_counts = {0: 0, 1: 0}
+        
+        # Detect label column name
+        labels_header = pd.read_csv(labels_path, nrows=0)
+        label_col = 'class' if 'class' in labels_header.columns else 'CLASS'
+        
         label_reader = pd.read_csv(
-            settings.DATASET_PATH,
+            labels_path,
             usecols=[label_col],
-            dtype={label_col: label_dtype},
+            dtype={label_col: np.float32},
             chunksize=chunk_size,
             low_memory=True
         )
         for chunk in label_reader:
             label_values = chunk[label_col].to_numpy(copy=False)
             np.nan_to_num(label_values, copy=False)
-            if label_col == 'CLASS':
-                labels = label_values.astype(np.int8, copy=False)
-            else:
-                labels = (label_values > 0).astype(np.int8)
+            labels = label_values.astype(np.int8, copy=False)
             total_counts[0] += int((labels == 0).sum())
             total_counts[1] += int((labels == 1).sum())
 
@@ -200,25 +203,30 @@ class MalwareModelTrainer:
         y_parts = []
         remaining = target_counts.copy()
 
-        dtype_map_with_float_label = dict(dtype_map)
-        dtype_map_with_float_label[label_col] = np.float32
-        data_reader = pd.read_csv(
-            settings.DATASET_PATH,
-            usecols=feature_cols + [label_col],
-            dtype=dtype_map_with_float_label,
+        # Read features and labels in parallel chunks
+        features_reader = pd.read_csv(
+            features_path,
+            usecols=feature_cols,
+            dtype=dtype_map,
             chunksize=chunk_size,
             low_memory=True
         )
-        for chunk in data_reader:
+        
+        labels_reader = pd.read_csv(
+            labels_path,
+            usecols=[label_col],
+            dtype={label_col: np.float32},
+            chunksize=chunk_size,
+            low_memory=True
+        )
+        
+        for features_chunk, labels_chunk in zip(features_reader, labels_reader):
             if remaining[0] <= 0 and remaining[1] <= 0:
                 break
 
-            label_values = chunk[label_col].to_numpy(copy=False)
+            label_values = labels_chunk[label_col].to_numpy(copy=False)
             np.nan_to_num(label_values, copy=False)
-            if label_col == 'CLASS':
-                labels = label_values.astype(np.int8, copy=False)
-            else:
-                labels = (label_values > 0).astype(np.int8)
+            labels = label_values.astype(np.int8, copy=False)
 
             for cls in (0, 1):
                 need = remaining[cls]
@@ -229,7 +237,7 @@ class MalwareModelTrainer:
                     continue
                 take = min(need, idx.size)
                 chosen = rng.choice(idx, size=take, replace=False)
-                X_parts.append(chunk.iloc[chosen][feature_cols].to_numpy(copy=False))
+                X_parts.append(features_chunk.iloc[chosen][feature_cols].to_numpy(copy=False))
                 y_parts.append(labels[chosen])
                 remaining[cls] -= take
 
