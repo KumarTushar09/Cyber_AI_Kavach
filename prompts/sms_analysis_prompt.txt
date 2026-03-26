@@ -1,0 +1,1 @@
+Analyze SMS fraud indicators and output structured JSON.

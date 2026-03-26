@@ -1,0 +1,10 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+pydantic==2.11.7
+httpx==0.28.1
+python-dotenv==1.1.1
+psycopg[binary]==3.2.9
+qdrant-client==1.11.1
+boto3==1.35.36
+python-multipart==0.0.9
+pytest==8.3.3
